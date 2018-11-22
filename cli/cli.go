@@ -14,29 +14,52 @@ func Start() {
 
 	flags := []cli.Flag{
 		cli.StringFlag{
-			Name:   "org",
-			Value:  "",
-			Usage:  "Organization",
+			Name:  "org",
+			Value: "",
+			Usage: "Organization",
 		},
 		cli.StringFlag{
-			Name:   "team",
-			Value:  "",
-			Usage:  "Team name",
+			Name:  "team",
+			Value: "",
+			Usage: "Team name",
 		},
 		cli.IntFlag{
-			Name:   "start, s",
-			Value:  -14,
-			Usage:  "Start of range - days from now. E. g. -14",
+			Name:  "start, s",
+			Value: -14,
+			Usage: "Start of range - days from now. E. g. -14",
 		},
 		cli.IntFlag{
-			Name:   "end, e",
-			Value:  -1,
-			Usage:  "End of range - days from now. E. g. -7",
+			Name:  "end, e",
+			Value: -1,
+			Usage: "End of range - days from now. E. g. -7",
 		},
 		cli.StringFlag{
 			Name:  "api-token, t",
 			Value: "",
 			Usage: "Github API token with repo and org scope",
+		},
+	}
+
+	singleFlags := []cli.Flag{
+		cli.StringFlag{
+			Name:  "org",
+			Value: "",
+			Usage: "Organization",
+		},
+		cli.StringFlag{
+			Name:  "repo",
+			Value: "",
+			Usage: "Repository",
+		},
+		cli.StringFlag{
+			Name:  "api-token, t",
+			Value: "",
+			Usage: "Github API token with repo and org scope",
+		},
+		cli.IntFlag{
+			Name:  "pr-number, p",
+			Value: 0,
+			Usage: "PR Number",
 		},
 	}
 
@@ -46,6 +69,12 @@ func Start() {
 			Usage:  "Get Statistics",
 			Action: stats,
 			Flags:  flags,
+		},
+		{
+			Name:   "single",
+			Usage:  "Get Single PR Details",
+			Action: singlePr,
+			Flags:  singleFlags,
 		},
 	}
 
