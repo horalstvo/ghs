@@ -35,4 +35,4 @@ The token needs `read:org` and `repo` rights. You can create one in Settings -> 
 Currently more of an MVP. Future improvements:
 
 - Paging get pull requests when last 30 PRs is not enough for specified range.
-- Workhours - account for people submitting and reviewing pull requests over the weekend.
+- Dockerization

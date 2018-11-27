@@ -22,6 +22,24 @@ func TestWorkHoursSameDay(t *testing.T) {
 	assertEqual(t, workHours, 6)
 }
 
+func TestWorkHoursAroundWeekend(t *testing.T) {
+	// End on weekend.
+	workHours := WorkHours(parse("2018-11-23T12:00:00Z"), parse("2018-11-25T16:00:00Z"))
+	assertEqual(t, workHours, 6)
+
+	// Start on weekend.
+	workHours = WorkHours(parse("2018-11-24T12:00:00Z"), parse("2018-11-26T12:00:00Z"))
+	assertEqual(t, workHours, 3)
+
+	// Both on different weekends.
+	workHours = WorkHours(parse("2018-11-24T12:00:00Z"), parse("2018-12-01T20:00:00Z"))
+	assertEqual(t, workHours, 5*9)
+
+	// Both on the same weekend.
+	workHours = WorkHours(parse("2018-11-24T12:00:00Z"), parse("2018-11-25T20:00:00Z"))
+	assertEqual(t, workHours, 0)
+}
+
 func TestWorkHoursDays(t *testing.T) {
 	workHours := WorkHours(parse("2018-10-02T00:00:00Z"), parse("2018-10-03T00:00:00Z"))
 	assertEqual(t, workHours, 9)

@@ -103,8 +103,8 @@ func getDetails(lastWeekPrs []*github.PullRequest, org string, ctx context.Conte
 
 	for i, pr := range lastWeekPrs {
 		go func(i int, pr *github.PullRequest) {
+			defer waitGroup.Done()
 			pullRequests[i] = getPullRequestDetails(org, pr, ctx, client);
-			waitGroup.Done()
 		}(i, pr);
 	}
 	waitGroup.Wait()
@@ -205,7 +205,7 @@ func getReviews(org string, repo string, number int, ctx context.Context, client
 				Submitted: *rev.SubmittedAt,
 			})
 		} else {
-			fmt.Printf("Nil for submittedAt for %s:%s:%d\n%v\n", org, repo, number, rev)
+			fmt.Printf("Skipping %s:%s:%d - nil for submittedAt.\n%v\n", org, repo, number, rev)
 		}
 	}
 	return reviews
