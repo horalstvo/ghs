@@ -3,17 +3,18 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os"
+	"sort"
+	"sync"
+	"text/tabwriter"
+	"time"
+
 	"github.com/google/go-github/github"
 	"github.com/horalstvo/ghs/external"
 	"github.com/horalstvo/ghs/models"
 	"github.com/horalstvo/ghs/util"
 	"github.com/logrusorgru/aurora"
 	"github.com/montanaflynn/stats"
-	"os"
-	"sort"
-	"sync"
-	"text/tabwriter"
-	"time"
 )
 
 func GetStats(config models.StatsConfig) {
@@ -34,6 +35,7 @@ func GetStats(config models.StatsConfig) {
 	fmt.Printf("Calculate statistics\n")
 
 	first80, approval80 := getStatistics(pullRequests)
+	models.PullRequestByAuthor(pullRequests).Sort()
 
 	fmt.Printf("80th percentiles: first review: %f approval: %f\n", first80, approval80)
 	tw := new(tabwriter.Writer)
@@ -93,7 +95,7 @@ func getPullRequests(repos []*github.Repository, config models.StatsConfig, ctx 
 }
 
 func getDetails(lastWeekPrs []*github.PullRequest, org string, ctx context.Context,
-	client *github.Client) ([]models.PullRequest) {
+	client *github.Client) []models.PullRequest {
 
 	fmt.Println("Getting pull requests details.")
 
@@ -104,8 +106,8 @@ func getDetails(lastWeekPrs []*github.PullRequest, org string, ctx context.Conte
 	for i, pr := range lastWeekPrs {
 		go func(i int, pr *github.PullRequest) {
 			defer waitGroup.Done()
-			pullRequests[i] = getPullRequestDetails(org, pr, ctx, client);
-		}(i, pr);
+			pullRequests[i] = getPullRequestDetails(org, pr, ctx, client)
+		}(i, pr)
 	}
 	waitGroup.Wait()
 	fmt.Println("Done")
