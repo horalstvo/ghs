@@ -26,7 +26,7 @@ func GetStats(config models.StatsConfig) {
 
 	prs := getPullRequests(repos, config, ctx, client)
 
-	filteredPrs := filterPullRequests(prs, config)
+	filteredPrs := filterPullRequests(prs, config.Start, config.End)
 
 	fmt.Printf("Number of PRs opened in the interval: %d\n", aurora.Blue(len(filteredPrs)))
 
@@ -70,6 +70,38 @@ func GetSingle(config models.SingleStatsConfig) {
 	}
 	tw.Flush()
 }
+
+func GetRepoStats(config models.RepoConfig) {
+	ctx := context.Background()
+
+	client := external.GetClient(ctx, config.ApiToken)
+
+	prs := external.GetPullRequests(config.Org, config.Repo, ctx, client)
+
+	filteredPrs := filterPullRequests(prs, config.Start, config.End)
+
+	fmt.Printf("Number of PRs opened in the interval: %d\n", aurora.Blue(len(filteredPrs)))
+
+	pullRequests := getDetails(filteredPrs, config.Org, ctx, client)
+
+	fmt.Printf("Calculate statistics\n")
+
+	first80, approval80 := getStatistics(pullRequests)
+	models.PullRequestByAuthor(pullRequests).Sort()
+
+	fmt.Printf("80th percentiles: first review: %f approval: %f\n", first80, approval80)
+	tw := new(tabwriter.Writer)
+	tw.Init(os.Stdout, 6, 4, 1, ' ', tabwriter.Debug|tabwriter.AlignRight)
+	fmt.Fprintf(tw, "Repo\tPR\tAuthor\t%s\t#\t%s\tApproved\n", aurora.Black("1st"), aurora.Red("App"))
+	for _, pr := range pullRequests {
+		fmt.Fprintf(tw, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n", pr.Repo, pr.Number, pr.Author,
+			getColored(pr.FirstReview, first80), len(pr.Reviews),
+			getColored(pr.ApprovalAfter, approval80), pr.ApprovedBy)
+	}
+	tw.Flush()
+}
+
+
 
 func getPullRequests(repos []*github.Repository, config models.StatsConfig, ctx context.Context, client *github.Client) []*github.PullRequest {
 
@@ -213,9 +245,9 @@ func getReviews(org string, repo string, number int, ctx context.Context, client
 	return reviews
 }
 
-func filterPullRequests(prs []*github.PullRequest, config models.StatsConfig) []*github.PullRequest {
-	from := time.Now().AddDate(0, 0, config.Start)
-	to := time.Now().AddDate(0, 0, config.End)
+func filterPullRequests(prs []*github.PullRequest, startDays int, endDays int) []*github.PullRequest {
+	from := time.Now().AddDate(0, 0, startDays)
+	to := time.Now().AddDate(0, 0, endDays)
 	lastWeekPrs := filter(prs, func(request *github.PullRequest) bool {
 		return request.CreatedAt.After(from) && request.CreatedAt.Before(to)
 	})

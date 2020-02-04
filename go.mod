@@ -1,6 +1,7 @@
 module github.com/horalstvo/ghs
 
 require (
+	github.com/aws/aws-lambda-go/lambda v1.10.0
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/logrusorgru/aurora v0.0.0-20181002194514-a7b3b318ed4e

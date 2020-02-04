@@ -63,6 +63,34 @@ func Start() {
 		},
 	}
 
+	repoFlags := []cli.Flag{
+		cli.StringFlag{
+			Name:  "org",
+			Value: "",
+			Usage: "Organization",
+		},
+		cli.StringFlag{
+			Name:  "repo",
+			Value: "",
+			Usage: "Repository",
+		},
+		cli.StringFlag{
+			Name:  "api-token, t",
+			Value: "",
+			Usage: "Github API token with repo and org scope",
+		},
+		cli.IntFlag{
+			Name:  "start, s",
+			Value: -14,
+			Usage: "Start of range - days from now. E. g. -14",
+		},
+		cli.IntFlag{
+			Name:  "end, e",
+			Value: -1,
+			Usage: "End of range - days from now. E. g. -7",
+		},
+	}
+
 	app.Commands = []cli.Command{
 		{
 			Name:   "stats",
@@ -75,6 +103,12 @@ func Start() {
 			Usage:  "Get Single PR Details",
 			Action: singlePr,
 			Flags:  singleFlags,
+		},
+		{
+			Name:   "repo",
+			Usage:  "Get Single Repo Details",
+			Action: singleRepo,
+			Flags:  repoFlags,
 		},
 	}
 

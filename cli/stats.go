@@ -29,6 +29,17 @@ func parseSingleDataArgs(c *cli.Context) models.SingleStatsConfig {
 	return config
 }
 
+func parseRepoConfigDataArgs(c *cli.Context) models.RepoConfig {
+	config := models.RepoConfig{
+		Org:      c.String("org"),
+		Repo:     c.String("repo"),
+		ApiToken: c.String("api-token"),
+		Start:    c.Int("start"),
+		End:      c.Int("end"),
+	}
+	return config
+}
+
 func stats(c *cli.Context) error {
 	fmt.Println("Get pull requests statistics")
 	config := parseDataArgs(c)
@@ -53,6 +64,20 @@ func singlePr(c *cli.Context) error {
 	}
 
 	controllers.GetSingle(config)
+
+	return nil
+}
+
+func singleRepo(c *cli.Context) error {
+	fmt.Println("Get one repo statistics")
+	config := parseRepoConfigDataArgs(c)
+	fmt.Printf("Config: %+v\n", config)
+	if err := config.Validate(); err != nil {
+		fmt.Printf("Missing arguments: %s\n", err.Error())
+		return err
+	}
+
+	controllers.GetRepoStats(config)
 
 	return nil
 }
