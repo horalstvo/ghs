@@ -1,12 +1,12 @@
 package controllers
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"sort"
 	"sync"
-	"text/tabwriter"
 	"time"
 
 	"github.com/google/go-github/github"
@@ -14,7 +14,6 @@ import (
 	"github.com/horalstvo/ghs/models"
 	"github.com/horalstvo/ghs/util"
 	"github.com/logrusorgru/aurora"
-	"github.com/montanaflynn/stats"
 )
 
 func GetStats(config models.StatsConfig) {
@@ -26,82 +25,31 @@ func GetStats(config models.StatsConfig) {
 
 	prs := getPullRequests(repos, config, ctx, client)
 
-	filteredPrs := filterPullRequests(prs, config.Start, config.End)
+	prs = filterPullRequests(prs, config.Start, config.End)
 
-	fmt.Printf("Number of PRs opened in the interval: %d\n", aurora.Blue(len(filteredPrs)))
-
-	pullRequests := getDetails(filteredPrs, config.Org, ctx, client)
-
-	fmt.Printf("Calculate statistics\n")
-
-	first80, approval80 := getStatistics(pullRequests)
-	models.PullRequestByAuthor(pullRequests).Sort()
-
-	fmt.Printf("80th percentiles: first review: %f approval: %f\n", first80, approval80)
-	tw := new(tabwriter.Writer)
-	tw.Init(os.Stdout, 6, 4, 1, ' ', tabwriter.Debug|tabwriter.AlignRight)
-	fmt.Fprintf(tw, "Repo\tPR\tAuthor\t%s\t#\t%s\tApproved\n", aurora.Black("1st"), aurora.Red("App"))
-	for _, pr := range pullRequests {
-		fmt.Fprintf(tw, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n", pr.Repo, pr.Number, pr.Author,
-			getColored(pr.FirstReview, first80), len(pr.Reviews),
-			getColored(pr.ApprovalAfter, approval80), pr.ApprovedBy)
-	}
-	tw.Flush()
-}
-
-func GetSingle(config models.SingleStatsConfig) {
-	ctx := context.Background()
-
-	client := external.GetClient(ctx, config.ApiToken)
-
-	pr, _, err := client.PullRequests.Get(ctx, config.Org, config.Repo, config.PrNumber)
-	util.Check(err)
-
-	prs := []*github.PullRequest{pr}
+	fmt.Printf("Number of PRs opened in the interval: %d\n", aurora.Blue(len(prs)))
 
 	pullRequests := getDetails(prs, config.Org, ctx, client)
 
-	tw := new(tabwriter.Writer)
-	tw.Init(os.Stdout, 6, 4, 1, ' ', tabwriter.Debug|tabwriter.AlignRight)
-	fmt.Fprintf(tw, "Repo\tPR\tAuthor\t%s\t#\t%s\tApproved\n", aurora.Black("1st"), aurora.Red("App"))
+	fmt.Printf("Writing to CSV file '%v'...\n", config.File)
+	file, err := os.Create(config.File)
+	util.Check(err)
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+
+	fmt.Fprintf(writer, "Repo,Number,FirstReviewedHrs,FirstApprovedHrs,SecondApprovedHrs,MergedHrs\n")
 	for _, pr := range pullRequests {
-		fmt.Fprintf(tw, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n", pr.Repo, pr.Number, pr.Author,
-			pr.FirstReview, len(pr.Reviews), pr.ApprovalAfter, pr.ApprovedBy)
+		fmt.Fprintf(writer, "%v,%v,%v,%v,%v,%v\n", pr.Repo, pr.Number,
+			pr.FirstReviewedHrs, pr.FirstApprovedHrs, pr.SecondApprovedHrs, pr.MergedHrs)
 	}
-	tw.Flush()
+
+	writer.Flush()
+	file.Sync()
+
+	fmt.Println("Writing to CSV file completed")
+
 }
-
-func GetRepoStats(config models.RepoConfig) {
-	ctx := context.Background()
-
-	client := external.GetClient(ctx, config.ApiToken)
-
-	prs := external.GetPullRequests(config.Org, config.Repo, ctx, client)
-
-	filteredPrs := filterPullRequests(prs, config.Start, config.End)
-
-	fmt.Printf("Number of PRs opened in the interval: %d\n", aurora.Blue(len(filteredPrs)))
-
-	pullRequests := getDetails(filteredPrs, config.Org, ctx, client)
-
-	fmt.Printf("Calculate statistics\n")
-
-	first80, approval80 := getStatistics(pullRequests)
-	models.PullRequestByAuthor(pullRequests).Sort()
-
-	fmt.Printf("80th percentiles: first review: %f approval: %f\n", first80, approval80)
-	tw := new(tabwriter.Writer)
-	tw.Init(os.Stdout, 6, 4, 1, ' ', tabwriter.Debug|tabwriter.AlignRight)
-	fmt.Fprintf(tw, "Repo\tPR\tAuthor\t%s\t#\t%s\tApproved\n", aurora.Black("1st"), aurora.Red("App"))
-	for _, pr := range pullRequests {
-		fmt.Fprintf(tw, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n", pr.Repo, pr.Number, pr.Author,
-			getColored(pr.FirstReview, first80), len(pr.Reviews),
-			getColored(pr.ApprovalAfter, approval80), pr.ApprovedBy)
-	}
-	tw.Flush()
-}
-
-
 
 func getPullRequests(repos []*github.Repository, config models.StatsConfig, ctx context.Context, client *github.Client) []*github.PullRequest {
 
@@ -120,32 +68,33 @@ func getPullRequests(repos []*github.Repository, config models.StatsConfig, ctx 
 	waitGroup.Wait()
 
 	prs := make([]*github.PullRequest, 0)
-	for i, _ := range repos {
+	for i := range repos {
 		prs = append(prs, prsPerRepo[i]...)
 	}
 	return prs
 }
 
-func getDetails(lastWeekPrs []*github.PullRequest, org string, ctx context.Context,
+func getDetails(prs []*github.PullRequest, org string, ctx context.Context,
 	client *github.Client) []models.PullRequest {
 
-	fmt.Println("Getting pull requests details.")
+	fmt.Printf("Getting details for %v pull requests...\n", len(prs))
 
-	pullRequests := make([]models.PullRequest, len(lastWeekPrs))
-	var waitGroup sync.WaitGroup
-	waitGroup.Add(len(lastWeekPrs))
+	pullRequests := make([]models.PullRequest, len(prs))
 
-	for i, pr := range lastWeekPrs {
-		go func(i int, pr *github.PullRequest) {
-			defer waitGroup.Done()
-			pullRequests[i] = getPullRequestDetails(org, pr, ctx, client)
-		}(i, pr)
+	for i, pr := range prs {
+		pullRequests[i] = getPullRequestDetails(org, pr, ctx, client)
+
+		// Throttle number of sequential requests to GitHub API
+		if (i+1)%25 == 0 {
+			fmt.Printf("%v pull requests were processed\n", i)
+			time.Sleep(1 * time.Second)
+		}
 	}
-	waitGroup.Wait()
+
 	fmt.Println("Done")
 
 	sort.Slice(pullRequests, func(i, j int) bool {
-		return pullRequests[i].Author < pullRequests[j].Author
+		return pullRequests[i].Created.Before(pullRequests[j].Created)
 	})
 
 	return pullRequests
@@ -156,60 +105,58 @@ func getPullRequestDetails(org string, pr *github.PullRequest, ctx context.Conte
 
 	reviews := getReviews(org, *pr.Base.Repo.Name, *pr.Number, ctx, client)
 
+	firstReviewedHrs := -1
+	firstApprovedHrs := -1
+	secondApprovedHrs := -1
+	mergedHrs := -1
+
 	if len(reviews) > 0 {
-		approval := getApproval(reviews)
 		firstReview := reviews[0]
-		nilReview := models.Review{}
-		firstReviewHours := util.WorkHours(*pr.CreatedAt, firstReview.Submitted)
+		approvals := getApprovals(reviews)
+		firstReviewedHrs = util.WorkHours(*pr.CreatedAt, firstReview.Submitted)
 
-		if approval != nilReview {
-			approvalHours := util.WorkHours(*pr.CreatedAt, approval.Submitted)
-			return models.PullRequest{
-				Repo:          *pr.Base.Repo.Name,
-				Number:        *pr.Number,
-				Author:        *pr.User.Login,
-				Created:       *pr.CreatedAt,
-				Reviews:       reviews,
-				FirstReview:   firstReviewHours,
-				ApprovalAfter: approvalHours,
-				ApprovedBy:    approval.Author,
-			}
-		} else {
-			return models.PullRequest{
-				Repo:        *pr.Base.Repo.Name,
-				Number:      *pr.Number,
-				Author:      *pr.User.Login,
-				Created:     *pr.CreatedAt,
-				Reviews:     reviews,
-				FirstReview: firstReviewHours,
-			}
+		if len(approvals) > 0 {
+			firstApproval := approvals[0]
+			firstApprovedHrs = util.WorkHours(*pr.CreatedAt, firstApproval.Submitted)
 		}
-	} else {
-		return models.PullRequest{
-			Repo:    *pr.Base.Repo.Name,
-			Number:  *pr.Number,
-			Author:  *pr.User.Login,
-			Created: *pr.CreatedAt,
+
+		if len(approvals) > 1 {
+			secondApproval := approvals[1]
+			secondApprovedHrs = util.WorkHours(*pr.CreatedAt, secondApproval.Submitted)
 		}
 	}
-}
 
-func getStatistics(pullRequests []models.PullRequest) (float64, float64) {
-	firstReviews := make([]float64, 0)
-	approvals := make([]float64, 0)
-	for _, pr := range pullRequests {
-		if len(pr.Reviews) > 0 {
-			firstReviews = append(firstReviews, float64(pr.FirstReview))
-		}
-		if len(pr.ApprovedBy) > 0 {
-			approvals = append(approvals, float64(pr.ApprovalAfter))
-		}
+	if pr.MergedAt != nil {
+		mergedHrs = util.WorkHours(*pr.CreatedAt, *pr.MergedAt)
 	}
-	first80, err := stats.Percentile(firstReviews, 80)
-	util.Check(err)
-	approval80, errApr := stats.Percentile(approvals, 80)
-	util.Check(errApr)
-	return first80, approval80
+
+	pullRequest := models.PullRequest{
+		Repo:              *pr.Base.Repo.Name,
+		Number:            *pr.Number,
+		Created:           *pr.CreatedAt,
+		FirstReviewedHrs:  firstReviewedHrs,
+		FirstApprovedHrs:  firstApprovedHrs,
+		SecondApprovedHrs: secondApprovedHrs,
+		MergedHrs:         mergedHrs,
+
+		ChangedFiles: -1,
+		Additions:    -1,
+		Deletions:    -1,
+	}
+
+	if pr.ChangedFiles != nil {
+		pullRequest.ChangedFiles = *pr.ChangedFiles
+	}
+
+	if pr.Additions != nil {
+		pullRequest.Additions = *pr.Additions
+	}
+
+	if pr.Deletions != nil {
+		pullRequest.Deletions = *pr.Deletions
+	}
+
+	return pullRequest
 }
 
 func getColored(hours int, percentile float64) aurora.Value {
@@ -219,19 +166,20 @@ func getColored(hours int, percentile float64) aurora.Value {
 	return aurora.Gray(hours)
 }
 
-func getApproval(reviews []models.Review) models.Review {
+func getApprovals(reviews []models.Review) []models.Review {
+	approvals := make([]models.Review, 0)
 	for _, rev := range reviews {
 		if rev.Status == "APPROVED" {
-			return rev
+			approvals = append(approvals, rev)
 		}
 	}
-	return models.Review{}
+	return approvals
 }
 
 func getReviews(org string, repo string, number int, ctx context.Context, client *github.Client) []models.Review {
-	pr_reviews := external.GetReviews(org, repo, number, ctx, client)
+	rawReviews := external.GetReviews(org, repo, number, ctx, client)
 	reviews := make([]models.Review, 0)
-	for _, rev := range pr_reviews {
+	for _, rev := range rawReviews {
 		if rev.SubmittedAt != nil {
 			reviews = append(reviews, models.Review{
 				Author:    *rev.User.Login,
@@ -248,10 +196,10 @@ func getReviews(org string, repo string, number int, ctx context.Context, client
 func filterPullRequests(prs []*github.PullRequest, startDays int, endDays int) []*github.PullRequest {
 	from := time.Now().AddDate(0, 0, startDays)
 	to := time.Now().AddDate(0, 0, endDays)
-	lastWeekPrs := filter(prs, func(request *github.PullRequest) bool {
+	filteredPrs := filter(prs, func(request *github.PullRequest) bool {
 		return request.CreatedAt.After(from) && request.CreatedAt.Before(to)
 	})
-	return lastWeekPrs
+	return filteredPrs
 }
 
 func filter(prs []*github.PullRequest, fn func(*github.PullRequest) bool) []*github.PullRequest {

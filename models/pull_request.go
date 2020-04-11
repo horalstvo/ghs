@@ -17,11 +17,15 @@ type (
 		Number  int
 		Author  string
 		Created time.Time
-		Reviews []Review
 
-		FirstReview   int
-		ApprovalAfter int
-		ApprovedBy    string
+		FirstReviewedHrs  int
+		FirstApprovedHrs  int
+		SecondApprovedHrs int
+		MergedHrs         int
+
+		ChangedFiles int
+		Additions    int
+		Deletions    int
 	}
 
 	PullRequestByAuthor []PullRequest

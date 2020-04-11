@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/google/go-github/github"
 	"github.com/horalstvo/ghs/util"
 	"golang.org/x/oauth2"
@@ -20,16 +21,28 @@ func GetClient(ctx context.Context, apiToken string) *github.Client {
 }
 
 func GetPullRequests(org string, repo string, ctx context.Context, client *github.Client) []*github.PullRequest {
-	prs, _, err := client.PullRequests.List(ctx, org, repo, &github.PullRequestListOptions{
-		Sort:      "created",
-		State:     "all",
-		Direction: "desc",
-		ListOptions: github.ListOptions{
-			PerPage: 30,
-		},
-	})
-	util.Check(err)
-	return prs
+	allPrs := make([]*github.PullRequest, 0)
+	pageSize := 50
+	page := -1
+	for {
+		page += 1
+		prs, _, err := client.PullRequests.List(ctx, org, repo, &github.PullRequestListOptions{
+			Sort:      "created",
+			State:     "all",
+			Direction: "desc",
+			ListOptions: github.ListOptions{
+				PerPage: pageSize,
+				Page:    page,
+			},
+		})
+		util.Check(err)
+		allPrs = append(allPrs, prs...)
+
+		if len(prs) < pageSize {
+			break
+		}
+	}
+	return allPrs
 }
 
 func GetReviews(org string, repo string, number int, ctx context.Context,
@@ -48,7 +61,7 @@ func GetTeamRepos(org string, team string, ctx context.Context, client *github.C
 	return repos
 }
 
-func getTeamId(org string, team string, ctx context.Context, client *github.Client) (*int64, error){
+func getTeamId(org string, team string, ctx context.Context, client *github.Client) (*int64, error) {
 	teams, _, err := client.Teams.ListTeams(ctx, org, &github.ListOptions{})
 	util.Check(err)
 
@@ -57,5 +70,5 @@ func getTeamId(org string, team string, ctx context.Context, client *github.Clie
 			return t.ID, nil
 		}
 	}
-	return nil, errors.New(fmt.Sprintf("Team not found for %s", team));
+	return nil, errors.New(fmt.Sprintf("Team not found for %s", team))
 }

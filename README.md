@@ -1,5 +1,15 @@
 # Github Pull Request Statistics
 
+This is fork of [horalstvo/ghs](https://github.com/horalstvo/ghs) repository. The following was changed: 
+- Output to CSV file instead of stdout
+- Remove statistic computations
+- Add pagination when retrieving pull requests
+- Remove `single` and `repo` commands for simplicity, only `stats` command is supported 
+
+Kudos to the original author!
+
+Below is a content from the original repository. 
+
 ## Why
 
 I noticed I wait quite a while on pull request reviews. Also there is at times a lot of back and forth which slows 
@@ -24,7 +34,7 @@ how many reviews there were in total on the pull request and how long it took to
 - Build and run:
 ```bash
 go build
-./ghs stats -org <org-name> -team <team-name> -t <api-token>
+./ghs stats --org <org-name> --team <team-name> --api-token <api-token> --start -90 --end 0 --file ghs.csv
 ```
 
 The token needs `read:org` and `repo` rights. You can create one in Settings -> Developer Settings -> Personal Access
