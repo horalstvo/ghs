@@ -54,8 +54,14 @@ func GetReviews(ctx context.Context, org string, repo string, number int,
 	return reviews
 }
 
-func GetTeamRepos(org string, team string, ctx context.Context, client *github.Client) []*github.Repository {
-	teamId, getTeamErr := getTeamId(org, team, ctx, client)
+// GetPullRequest returns details of the given pull request
+func GetPullRequest(ctx context.Context, org string, repo string, number int,
+	client *github.Client) *github.PullRequest {
+	pullRequest, _, err := client.PullRequests.Get(ctx, org, repo, number)
+	util.Check(err)
+	return pullRequest
+}
+
 // GetTeamRepos returns repositories of the given team
 func GetTeamRepos(ctx context.Context, org string, team string, client *github.Client) []*github.Repository {
 	teamID, getTeamErr := getTeamID(ctx, org, team, client)

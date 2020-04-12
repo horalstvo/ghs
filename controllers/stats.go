@@ -30,7 +30,7 @@ func GetStats(config models.StatsConfig) {
 
 	fmt.Printf("Number of PRs opened in the interval: %d\n", aurora.Blue(len(prs)))
 
-	pullRequests := getDetails(ctx, prs, config.Org, client)
+	pullRequests := getDetails(ctx, prs, config.Org, config, client)
 
 	fmt.Printf("Writing to CSV file '%v'...\n", config.File)
 	file, err := os.Create(config.File)
@@ -39,10 +39,10 @@ func GetStats(config models.StatsConfig) {
 
 	writer := bufio.NewWriter(file)
 
-	fmt.Fprintf(writer, "Repo,Number,FirstReviewedHrs,FirstApprovedHrs,SecondApprovedHrs,MergedHrs\n")
+	fmt.Fprintf(writer, "Repo,Number,FirstReviewedHrs,FirstApprovedHrs,SecondApprovedHrs,MergedHrs,ChangedFiles,Additions,Deletions\n")
 	for _, pr := range pullRequests {
-		fmt.Fprintf(writer, "%v,%v,%v,%v,%v,%v\n", pr.Repo, pr.Number,
-			pr.FirstReviewedHrs, pr.FirstApprovedHrs, pr.SecondApprovedHrs, pr.MergedHrs)
+		fmt.Fprintf(writer, "%v,%v,%v,%v,%v,%v,%v,%v,%v\n", pr.Repo, pr.Number,
+			pr.FirstReviewedHrs, pr.FirstApprovedHrs, pr.SecondApprovedHrs, pr.MergedHrs, pr.ChangedFiles, pr.Additions, pr.Deletions)
 	}
 
 	writer.Flush()
@@ -75,15 +75,22 @@ func getPullRequests(ctx context.Context, repos []*github.Repository, config mod
 	return prs
 }
 
+func getPullRequest(ctx context.Context, repo string, number int,
+	config models.StatsConfig, client *github.Client) *github.PullRequest {
+
+	pr := external.GetPullRequest(ctx, config.Org, repo, number, client)
+	return pr
+}
+
 func getDetails(ctx context.Context, prs []*github.PullRequest, org string,
-	client *github.Client) []models.PullRequest {
+	config models.StatsConfig, client *github.Client) []models.PullRequest {
 
 	fmt.Printf("Getting details for %v pull requests...\n", len(prs))
 
 	pullRequests := make([]models.PullRequest, len(prs))
 
 	for i, pr := range prs {
-		pullRequests[i] = getPullRequestDetails(ctx, org, pr, client)
+		pullRequests[i] = getPullRequestDetails(ctx, org, pr, config, client)
 
 		// Throttle number of sequential requests to GitHub API
 		if (i+1)%25 == 0 {
@@ -102,14 +109,19 @@ func getDetails(ctx context.Context, prs []*github.PullRequest, org string,
 }
 
 func getPullRequestDetails(ctx context.Context, org string, pr *github.PullRequest,
-	client *github.Client) models.PullRequest {
+	config models.StatsConfig, client *github.Client) models.PullRequest {
 
+	prDetails := getPullRequest(ctx, *pr.Base.Repo.Name, *pr.Number, config, client)
 	reviews := getReviews(ctx, org, *pr.Base.Repo.Name, *pr.Number, client)
 
 	firstReviewedHrs := -1
 	firstApprovedHrs := -1
 	secondApprovedHrs := -1
 	mergedHrs := -1
+
+	changedFiles := -1
+	additions := -1
+	deletions := -1
 
 	if len(reviews) > 0 {
 		firstReview := reviews[0]
@@ -127,8 +139,20 @@ func getPullRequestDetails(ctx context.Context, org string, pr *github.PullReque
 		}
 	}
 
-	if pr.MergedAt != nil {
-		mergedHrs = util.WorkHours(*pr.CreatedAt, *pr.MergedAt)
+	if prDetails.MergedAt != nil {
+		mergedHrs = util.WorkHours(*pr.CreatedAt, *prDetails.MergedAt)
+	}
+
+	if prDetails.ChangedFiles != nil {
+		changedFiles = *prDetails.ChangedFiles
+	}
+
+	if prDetails.Additions != nil {
+		additions = *prDetails.Additions
+	}
+
+	if prDetails.Deletions != nil {
+		deletions = *prDetails.Deletions
 	}
 
 	pullRequest := models.PullRequest{
@@ -140,21 +164,9 @@ func getPullRequestDetails(ctx context.Context, org string, pr *github.PullReque
 		SecondApprovedHrs: secondApprovedHrs,
 		MergedHrs:         mergedHrs,
 
-		ChangedFiles: -1,
-		Additions:    -1,
-		Deletions:    -1,
-	}
-
-	if pr.ChangedFiles != nil {
-		pullRequest.ChangedFiles = *pr.ChangedFiles
-	}
-
-	if pr.Additions != nil {
-		pullRequest.Additions = *pr.Additions
-	}
-
-	if pr.Deletions != nil {
-		pullRequest.Deletions = *pr.Deletions
+		ChangedFiles: changedFiles,
+		Additions:    additions,
+		Deletions:    deletions,
 	}
 
 	return pullRequest
