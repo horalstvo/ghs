@@ -1,0 +1,7 @@
+.editorconfig
+.git
+.gitignore
+.vscode
+Dockerfile
+ghs
+*.csv
