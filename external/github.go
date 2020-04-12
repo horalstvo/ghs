@@ -2,7 +2,6 @@ package external
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/google/go-github/github"
@@ -10,6 +9,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// GetClient returns GitHub client
 func GetClient(ctx context.Context, apiToken string) *github.Client {
 
 	ts := oauth2.StaticTokenSource(
@@ -20,12 +20,13 @@ func GetClient(ctx context.Context, apiToken string) *github.Client {
 	return github.NewClient(tc)
 }
 
-func GetPullRequests(org string, repo string, ctx context.Context, client *github.Client) []*github.PullRequest {
+// GetPullRequests returns pull requests of the given repository
+func GetPullRequests(ctx context.Context, org string, repo string, client *github.Client) []*github.PullRequest {
 	allPrs := make([]*github.PullRequest, 0)
 	pageSize := 50
 	page := -1
 	for {
-		page += 1
+		page++
 		prs, _, err := client.PullRequests.List(ctx, org, repo, &github.PullRequestListOptions{
 			Sort:      "created",
 			State:     "all",
@@ -45,7 +46,8 @@ func GetPullRequests(org string, repo string, ctx context.Context, client *githu
 	return allPrs
 }
 
-func GetReviews(org string, repo string, number int, ctx context.Context,
+// GetReviews returns reviews of the given pull request
+func GetReviews(ctx context.Context, org string, repo string, number int,
 	client *github.Client) []*github.PullRequestReview {
 	reviews, _, err := client.PullRequests.ListReviews(ctx, org, repo, number, &github.ListOptions{})
 	util.Check(err)
@@ -54,14 +56,18 @@ func GetReviews(org string, repo string, number int, ctx context.Context,
 
 func GetTeamRepos(org string, team string, ctx context.Context, client *github.Client) []*github.Repository {
 	teamId, getTeamErr := getTeamId(org, team, ctx, client)
+// GetTeamRepos returns repositories of the given team
+func GetTeamRepos(ctx context.Context, org string, team string, client *github.Client) []*github.Repository {
+	teamID, getTeamErr := getTeamID(ctx, org, team, client)
 	util.Check(getTeamErr)
 
-	repos, _, err := client.Teams.ListTeamRepos(ctx, *teamId, &github.ListOptions{})
+	repos, _, err := client.Teams.ListTeamRepos(ctx, *teamID, &github.ListOptions{})
 	util.Check(err)
 	return repos
 }
 
-func getTeamId(org string, team string, ctx context.Context, client *github.Client) (*int64, error) {
+// GetTeamID returns the identifier of the team by name
+func getTeamID(ctx context.Context, org string, team string, client *github.Client) (*int64, error) {
 	teams, _, err := client.Teams.ListTeams(ctx, org, &github.ListOptions{})
 	util.Check(err)
 
@@ -70,5 +76,5 @@ func getTeamId(org string, team string, ctx context.Context, client *github.Clie
 			return t.ID, nil
 		}
 	}
-	return nil, errors.New(fmt.Sprintf("Team not found for %s", team))
+	return nil, fmt.Errorf("Team not found for %s", team)
 }

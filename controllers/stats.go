@@ -16,20 +16,21 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
+// GetStats returns pull request data
 func GetStats(config models.StatsConfig) {
 	ctx := context.Background()
 
 	client := external.GetClient(ctx, config.ApiToken)
 
-	repos := external.GetTeamRepos(config.Org, config.Team, ctx, client)
+	repos := external.GetTeamRepos(ctx, config.Org, config.Team, client)
 
-	prs := getPullRequests(repos, config, ctx, client)
+	prs := getPullRequests(ctx, repos, config, client)
 
 	prs = filterPullRequests(prs, config.Start, config.End)
 
 	fmt.Printf("Number of PRs opened in the interval: %d\n", aurora.Blue(len(prs)))
 
-	pullRequests := getDetails(prs, config.Org, ctx, client)
+	pullRequests := getDetails(ctx, prs, config.Org, client)
 
 	fmt.Printf("Writing to CSV file '%v'...\n", config.File)
 	file, err := os.Create(config.File)
@@ -51,7 +52,7 @@ func GetStats(config models.StatsConfig) {
 
 }
 
-func getPullRequests(repos []*github.Repository, config models.StatsConfig, ctx context.Context, client *github.Client) []*github.PullRequest {
+func getPullRequests(ctx context.Context, repos []*github.Repository, config models.StatsConfig, client *github.Client) []*github.PullRequest {
 
 	prsPerRepo := make([][]*github.PullRequest, len(repos))
 	var waitGroup sync.WaitGroup
@@ -60,7 +61,7 @@ func getPullRequests(repos []*github.Repository, config models.StatsConfig, ctx 
 	for i, repo := range repos {
 		go func(i int, repoName string) {
 			defer waitGroup.Done()
-			prsPerRepo[i] = external.GetPullRequests(config.Org, repoName, ctx, client)
+			prsPerRepo[i] = external.GetPullRequests(ctx, config.Org, repoName, client)
 			fmt.Printf("Number of PRs returned for %s: %d\n", repoName, aurora.Blue(len(prsPerRepo[i])))
 		}(i, *repo.Name)
 	}
@@ -74,7 +75,7 @@ func getPullRequests(repos []*github.Repository, config models.StatsConfig, ctx 
 	return prs
 }
 
-func getDetails(prs []*github.PullRequest, org string, ctx context.Context,
+func getDetails(ctx context.Context, prs []*github.PullRequest, org string,
 	client *github.Client) []models.PullRequest {
 
 	fmt.Printf("Getting details for %v pull requests...\n", len(prs))
@@ -82,7 +83,7 @@ func getDetails(prs []*github.PullRequest, org string, ctx context.Context,
 	pullRequests := make([]models.PullRequest, len(prs))
 
 	for i, pr := range prs {
-		pullRequests[i] = getPullRequestDetails(org, pr, ctx, client)
+		pullRequests[i] = getPullRequestDetails(ctx, org, pr, client)
 
 		// Throttle number of sequential requests to GitHub API
 		if (i+1)%25 == 0 {
@@ -100,10 +101,10 @@ func getDetails(prs []*github.PullRequest, org string, ctx context.Context,
 	return pullRequests
 }
 
-func getPullRequestDetails(org string, pr *github.PullRequest, ctx context.Context,
+func getPullRequestDetails(ctx context.Context, org string, pr *github.PullRequest,
 	client *github.Client) models.PullRequest {
 
-	reviews := getReviews(org, *pr.Base.Repo.Name, *pr.Number, ctx, client)
+	reviews := getReviews(ctx, org, *pr.Base.Repo.Name, *pr.Number, client)
 
 	firstReviewedHrs := -1
 	firstApprovedHrs := -1
@@ -176,8 +177,8 @@ func getApprovals(reviews []models.Review) []models.Review {
 	return approvals
 }
 
-func getReviews(org string, repo string, number int, ctx context.Context, client *github.Client) []models.Review {
-	rawReviews := external.GetReviews(org, repo, number, ctx, client)
+func getReviews(ctx context.Context, org string, repo string, number int, client *github.Client) []models.Review {
+	rawReviews := external.GetReviews(ctx, org, repo, number, client)
 	reviews := make([]models.Review, 0)
 	for _, rev := range rawReviews {
 		if rev.SubmittedAt != nil {
