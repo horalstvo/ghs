@@ -216,7 +216,7 @@ func getColored(hours int, percentile float64) aurora.Value {
 	if float64(hours) >= percentile {
 		return aurora.Red(hours)
 	}
-	return aurora.Gray(hours)
+	return aurora.Green(hours)
 }
 
 func getApproval(reviews []models.Review) models.Review {

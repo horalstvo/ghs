@@ -12,7 +12,7 @@ func Start() {
 	app.Version = "0.0.1"
 	app.Authors = []cli.Author{{Name: "Ondrej Burkert"}}
 
-	flags := []cli.Flag{
+	teamFlags := []cli.Flag{
 		cli.StringFlag{
 			Name:  "org",
 			Value: "",
@@ -96,7 +96,7 @@ func Start() {
 			Name:   "stats",
 			Usage:  "Get Statistics",
 			Action: stats,
-			Flags:  flags,
+			Flags:  teamFlags,
 		},
 		{
 			Name:   "single",
